@@ -325,6 +325,62 @@
   .feedback.correct { display: block; background: rgba(39,174,96,0.12); color: #27ae60; border: 2px solid rgba(39,174,96,0.2); }
   .feedback.wrong   { display: block; background: rgba(231,76,60,0.1); color: #e74c3c; border: 2px solid rgba(231,76,60,0.15); }
 
+  /* Step-by-step explanation box */
+  .explanation {
+    display: none;
+    margin-top: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #fff9e6, #fff3cd);
+    border: 2px solid #f39c12;
+    border-radius: 14px;
+    text-align: left;
+    font-size: 0.92rem;
+    color: #2d3436;
+    animation: fadeIn 0.3s;
+  }
+  .explanation.show { display: block; }
+  .explanation .exp-title {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #e84393;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .explanation .exp-step {
+    padding: 6px 0;
+    border-bottom: 1px dashed #e0d5b7;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .explanation .exp-step:last-child { border-bottom: none; }
+  .explanation .step-num {
+    background: #6c5ce7;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .explanation .step-text { line-height: 1.5; }
+  .explanation .step-text b { color: #6c5ce7; }
+  .explanation .exp-result {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0,184,148,0.12);
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #27ae60;
+  }
+
   @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
   /* Timer bar */
@@ -601,6 +657,7 @@
   <div class="numpad" id="numpad"></div>
 
   <div class="feedback" id="feedback"></div>
+  <div class="explanation" id="explanation"></div>
 
   <div class="timer-bar-container"><div class="timer-bar" id="timer-bar"></div></div>
   <div class="streak-display">Streak: <span class="fire" id="streak-display">0 🔥</span></div>
@@ -617,6 +674,7 @@ let mode = 'order-of-ops';
 let difficulty = 'easy';
 let correct = 0, wrong = 0, score = 0, streak = 0;
 let currentAnswer = null;
+let currentQuestionData = null; // stores question details for explanations
 let answerType = 'simple'; // 'simple' | 'fraction' | 'mixed'
 let timerInterval = null;
 let timeLeft = 0;
@@ -641,6 +699,7 @@ const $score      = document.getElementById('score');
 const $streak     = document.getElementById('streak-display');
 const $timerBar   = document.getElementById('timer-bar');
 const $numpad     = document.getElementById('numpad');
+const $explanation = document.getElementById('explanation');
 
 // ──── Mode & Difficulty buttons ────
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -989,6 +1048,8 @@ function newQuestion() {
   clearInterval(timerInterval);
   $feedback.className = 'feedback';
   $feedback.style.display = 'none';
+  $explanation.className = 'explanation';
+  $explanation.innerHTML = '';
 
   const currentMode = pickMode();
 
@@ -1008,6 +1069,7 @@ function setupOrderOfOps() {
   const q = generateOrderOfOps();
   answerType = 'simple';
   currentAnswer = q.ans;
+  currentQuestionData = { type: 'order-of-ops', expr: q.expr, ans: q.ans };
 
   $label.textContent = 'Order of Operations';
   $hint.textContent = 'Remember: × and ÷ before + and −';
@@ -1029,7 +1091,8 @@ function setupOrderOfOps() {
 function setupProperFraction() {
   const q = generateProperFraction();
   answerType = 'fraction';
-  currentAnswer = q.result; // {num, den}
+  currentAnswer = q.result;
+  currentQuestionData = { type: 'proper', frac1: q.frac1, frac2: q.frac2, symbol: q.symbol, result: q.result };
 
   $label.textContent = 'Proper Fractions';
   $hint.textContent = 'Answer as a simplified fraction (numerator < denominator)';
@@ -1047,7 +1110,8 @@ function setupProperFraction() {
 function setupImproperFraction() {
   const q = generateImproperFraction();
   answerType = 'fraction';
-  currentAnswer = q.result; // {num, den}
+  currentAnswer = q.result;
+  currentQuestionData = { type: 'improper', frac1: q.frac1, frac2: q.frac2, symbol: q.symbol, result: q.result };
 
   $label.textContent = 'Improper Fractions';
   $hint.textContent = 'Answer as a simplified fraction (numerator ≥ denominator is OK)';
@@ -1065,7 +1129,8 @@ function setupImproperFraction() {
 function setupMixedNumber() {
   const q = generateMixedNumber();
   answerType = 'mixed';
-  currentAnswer = q.result; // {whole, num, den}
+  currentAnswer = q.result;
+  currentQuestionData = { type: 'mixed', mixed1: q.mixed1, mixed2: q.mixed2, symbol: q.symbol, result: q.result };
 
   $label.textContent = 'Mixed Numbers';
   $hint.textContent = 'Answer as a simplified mixed number';
@@ -1358,8 +1423,9 @@ function handleWrong(correctAnswer) {
   wrong++; streak = 0;
   score = Math.max(0, score - 2);
   updateScoreboard();
-  showFeedback(false, `Wrong! The answer was ${correctAnswer}`);
-  setTimeout(newQuestion, 2200);
+  showFeedback(false, `Wrong! The answer is ${correctAnswer}`);
+  showExplanation();
+  setTimeout(newQuestion, 6000); // longer delay so kids can read the explanation
 }
 
 function skipQuestion() {
@@ -1373,6 +1439,158 @@ function showFeedback(isCorrect, msg) {
   $feedback.textContent = (isCorrect ? '🎉 ' : '😕 ') + msg;
   $feedback.className = 'feedback ' + (isCorrect ? 'correct' : 'wrong');
   $feedback.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════
+// STEP-BY-STEP EXPLANATION SYSTEM
+// ═══════════════════════════════════════════
+function showExplanation() {
+  if (!currentQuestionData) return;
+  const q = currentQuestionData;
+  let steps = [];
+
+  switch (q.type) {
+    case 'order-of-ops':
+      steps = explainOrderOfOps(q.expr, q.ans);
+      break;
+    case 'proper':
+    case 'improper':
+      steps = explainFractionOp(q.frac1, q.frac2, q.symbol, q.result);
+      break;
+    case 'mixed':
+      steps = explainMixedOp(q.mixed1, q.mixed2, q.symbol, q.result);
+      break;
+  }
+
+  if (steps.length === 0) return;
+
+  let html = '<div class="exp-title">📝 Here\'s how to solve it:</div>';
+  steps.forEach((step, i) => {
+    html += `<div class="exp-step">
+      <span class="step-num">${i + 1}</span>
+      <span class="step-text">${step}</span>
+    </div>`;
+  });
+
+  $explanation.innerHTML = html;
+  $explanation.className = 'explanation show';
+}
+
+function explainOrderOfOps(expr, ans) {
+  const steps = [];
+  let working = expr;
+
+  // Find and explain parentheses first
+  const parenRegex = /\(\s*(\d+)\s*([+−])\s*(\d+)\s*\)/;
+  let parenMatch;
+  while ((parenMatch = working.match(parenRegex))) {
+    const a = parseInt(parenMatch[1]), op = parenMatch[2], b = parseInt(parenMatch[3]);
+    const result = op === '+' ? a + b : a - b;
+    steps.push(`Solve parentheses first: <b>( ${a} ${op} ${b} ) = ${result}</b>`);
+    working = working.replace(parenMatch[0], result);
+  }
+
+  // Find and explain × and ÷ (left to right)
+  const mulDivRegex = /(\d+)\s*([×÷])\s*(\d+)/;
+  let mdMatch;
+  while ((mdMatch = working.match(mulDivRegex))) {
+    const a = parseInt(mdMatch[1]), op = mdMatch[2], b = parseInt(mdMatch[3]);
+    const result = op === '×' ? a * b : a / b;
+    const opName = op === '×' ? 'Multiply' : 'Divide';
+    steps.push(`${opName}: <b>${a} ${op} ${b} = ${Math.round(result)}</b>`);
+    working = working.replace(mdMatch[0], Math.round(result));
+  }
+
+  // Find and explain + and − (left to right)
+  const addSubRegex = /(\d+)\s*([+−])\s*(\d+)/;
+  let asMatch;
+  while ((asMatch = working.match(addSubRegex))) {
+    const a = parseInt(asMatch[1]), op = asMatch[2], b = parseInt(asMatch[3]);
+    const result = op === '+' ? a + b : a - b;
+    const opName = op === '+' ? 'Add' : 'Subtract';
+    steps.push(`${opName}: <b>${a} ${op} ${b} = ${result}</b>`);
+    working = working.replace(asMatch[0], result);
+  }
+
+  steps.push(`<div class="exp-result">✅ Answer = ${ans}</div>`);
+  return steps;
+}
+
+function explainFractionOp(f1, f2, symbol, result) {
+  const steps = [];
+  const n1 = f1.num, d1 = f1.den, n2 = f2.num, d2 = f2.den;
+
+  if (symbol === '+' || symbol === '−') {
+    if (d1 === d2) {
+      steps.push(`Denominators are the same (<b>${d1}</b>), so ${symbol === '+' ? 'add' : 'subtract'} the numerators directly`);
+      const resN = symbol === '+' ? n1 + n2 : n1 - n2;
+      steps.push(`<b>${n1} ${symbol} ${n2} = ${resN}</b>, so we get <b>${resN}/${d1}</b>`);
+    } else {
+      const lcd = (d1 * d2) / gcd(d1, d2);
+      const m1 = lcd / d1, m2 = lcd / d2;
+      steps.push(`Find a common denominator: LCD of <b>${d1}</b> and <b>${d2}</b> is <b>${lcd}</b>`);
+      steps.push(`Convert: <b>${n1}/${d1}</b> = <b>${n1 * m1}/${lcd}</b> and <b>${n2}/${d2}</b> = <b>${n2 * m2}/${lcd}</b>`);
+      const resN = symbol === '+' ? n1 * m1 + n2 * m2 : n1 * m1 - n2 * m2;
+      steps.push(`${symbol === '+' ? 'Add' : 'Subtract'} numerators: <b>${n1 * m1} ${symbol} ${n2 * m2} = ${resN}</b>`);
+      steps.push(`Result: <b>${resN}/${lcd}</b>`);
+    }
+  } else if (symbol === '×') {
+    steps.push(`Multiply numerators: <b>${n1} × ${n2} = ${n1 * n2}</b>`);
+    steps.push(`Multiply denominators: <b>${d1} × ${d2} = ${d1 * d2}</b>`);
+    steps.push(`Result: <b>${n1 * n2}/${d1 * d2}</b>`);
+  } else if (symbol === '÷') {
+    steps.push(`To divide fractions, <b>flip the second fraction</b> and multiply`);
+    steps.push(`<b>${n1}/${d1} × ${d2}/${n2}</b>`);
+    steps.push(`Numerators: <b>${n1} × ${d2} = ${n1 * d2}</b>`);
+    steps.push(`Denominators: <b>${d1} × ${n2} = ${d1 * n2}</b>`);
+    steps.push(`Result: <b>${n1 * d2}/${d1 * n2}</b>`);
+  }
+
+  // Simplify step
+  if (result.den === 1) {
+    steps.push(`Simplify: <b>= ${result.num}</b>`);
+  } else {
+    steps.push(`Simplify: <b>= ${result.num}/${result.den}</b>`);
+  }
+
+  const ansStr = result.den === 1 ? `${result.num}` : `${result.num}/${result.den}`;
+  steps.push(`<div class="exp-result">✅ Answer = ${ansStr}</div>`);
+  return steps;
+}
+
+function explainMixedOp(m1, m2, symbol, result) {
+  const steps = [];
+  const imp1 = m1.whole * m1.den + m1.num;
+  const imp2 = m2.whole * m2.den + m2.num;
+
+  steps.push(`Convert to improper fractions:`);
+  steps.push(`<b>${m1.whole} ${m1.num}/${m1.den}</b> → <b>${m1.whole}×${m1.den}+${m1.num} = ${imp1}</b> → <b>${imp1}/${m1.den}</b>`);
+  steps.push(`<b>${m2.whole} ${m2.num}/${m2.den}</b> → <b>${m2.whole}×${m2.den}+${m2.num} = ${imp2}</b> → <b>${imp2}/${m2.den}</b>`);
+
+  // Now explain the operation
+  if (symbol === '+' || symbol === '−') {
+    const lcd = (m1.den * m2.den) / gcd(m1.den, m2.den);
+    const mul1 = lcd / m1.den, mul2 = lcd / m2.den;
+    const adj1 = imp1 * mul1, adj2 = imp2 * mul2;
+    steps.push(`Common denominator: <b>${lcd}</b> → <b>${adj1}/${lcd}</b> ${symbol} <b>${adj2}/${lcd}</b>`);
+    const resN = symbol === '+' ? adj1 + adj2 : adj1 - adj2;
+    steps.push(`${symbol === '+' ? 'Add' : 'Subtract'}: <b>${adj1} ${symbol} ${adj2} = ${resN}</b> → <b>${resN}/${lcd}</b>`);
+  } else if (symbol === '×') {
+    steps.push(`Multiply: <b>${imp1}×${imp2} = ${imp1 * imp2}</b> over <b>${m1.den}×${m2.den} = ${m1.den * m2.den}</b>`);
+  } else if (symbol === '÷') {
+    steps.push(`Flip & multiply: <b>${imp1}/${m1.den} × ${m2.den}/${imp2}</b>`);
+    steps.push(`= <b>${imp1 * m2.den}/${m1.den * imp2}</b>`);
+  }
+
+  // Convert back
+  let ansStr = '';
+  if (result.whole !== 0) ansStr += result.whole;
+  if (result.num !== 0) ansStr += (result.whole ? ' ' : '') + result.num + '/' + result.den;
+  if (!ansStr) ansStr = '0';
+
+  steps.push(`Convert to mixed number: <b>${ansStr}</b>`);
+  steps.push(`<div class="exp-result">✅ Answer = ${ansStr}</div>`);
+  return steps;
 }
 
 function updateScoreboard() {
@@ -1393,7 +1611,8 @@ function startTimer() {
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
       showFeedback(false, 'Time\'s up!');
-      setTimeout(newQuestion, 1800);
+      showExplanation();
+      setTimeout(newQuestion, 6000);
     }
   }, 100);
 }
