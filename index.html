@@ -232,6 +232,84 @@
   .operator { font-size: 1.8rem; color: #6c5ce7; margin: 0 4px; font-weight: 800; }
   .equals { font-size: 1.8rem; color: #e84393; font-weight: 800; }
 
+  /* ── Visual fraction icons ── */
+  .fraction-visual {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: -8px 0 18px 0;
+    animation: fadeIn 0.4s;
+  }
+  .fraction-visual.show { display: flex; }
+  .fv-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .fv-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .fv-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+    max-width: 180px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 12px;
+    padding: 6px 10px;
+    border: 2px dashed rgba(108,92,231,0.2);
+  }
+  .fv-item {
+    font-size: 1.3rem;
+    line-height: 1;
+    transition: transform 0.2s;
+  }
+  .fv-item.filled { animation: popIn 0.3s ease backwards; }
+  .fv-item.empty  { filter: grayscale(1) opacity(0.25); }
+  .fv-op {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #6c5ce7;
+    align-self: center;
+  }
+  .fv-whole-group {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  .fv-whole-circle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: center;
+    max-width: 80px;
+    background: rgba(85,239,196,0.2);
+    border-radius: 10px;
+    padding: 4px 6px;
+    border: 2px solid rgba(0,184,148,0.3);
+  }
+  .fv-whole-circle .fv-item { font-size: 1.05rem; }
+  .fv-partial {
+    display: flex; flex-wrap: wrap; gap: 2px; justify-content: center;
+    max-width: 80px;
+    background: rgba(253,121,168,0.15);
+    border-radius: 10px;
+    padding: 4px 6px;
+    border: 2px dashed rgba(253,121,168,0.3);
+  }
+  .fv-partial .fv-item { font-size: 1.05rem; }
+  @keyframes popIn {
+    from { transform: scale(0); }
+    to   { transform: scale(1); }
+  }
+
   /* Answer input */
   .answer-section { margin-bottom: 20px; }
 
@@ -646,6 +724,7 @@
   <div class="question-label" id="question-label">Solve the problem</div>
   <div class="hint-text" id="hint-text"></div>
   <div class="question-display" id="question-display"></div>
+  <div class="fraction-visual" id="fraction-visual"></div>
 
   <div class="answer-section" id="answer-section"></div>
 
@@ -700,6 +779,105 @@ const $streak     = document.getElementById('streak-display');
 const $timerBar   = document.getElementById('timer-bar');
 const $numpad     = document.getElementById('numpad');
 const $explanation = document.getElementById('explanation');
+const $fracVisual = document.getElementById('fraction-visual');
+
+// ── Food icons for visual fraction display ──
+const foodIcons = ['🍕','🎂','🍬','🧁','🍩','🍪','🍦','🧃','🍰','🍫','🧇','🍭'];
+let currentFoodIcon = '🍕';
+function pickFoodIcon() { currentFoodIcon = foodIcons[rand(0, foodIcons.length - 1)]; }
+
+function renderFractionVisual(frac1, frac2, symbol, isMixed) {
+  pickFoodIcon();
+  let html = '';
+
+  if (isMixed) {
+    // Mixed number 1: whole circles + partial
+    html += renderMixedVisual(frac1, 'First');
+    html += `<span class="fv-op">${symbol}</span>`;
+    html += renderMixedVisual(frac2, 'Second');
+  } else {
+    // Simple / improper fraction
+    html += renderSimpleFracVisual(frac1.num, frac1.den, 'First');
+    html += `<span class="fv-op">${symbol}</span>`;
+    html += renderSimpleFracVisual(frac2.num, frac2.den, 'Second');
+  }
+
+  $fracVisual.innerHTML = html;
+  $fracVisual.className = 'fraction-visual show';
+}
+
+function renderSimpleFracVisual(num, den, label) {
+  // For improper fractions, show full groups + remainder
+  const wholes = Math.floor(num / den);
+  const partNum = num % den;
+  let inner = '';
+
+  if (wholes > 0 && wholes <= 4) {
+    for (let w = 0; w < wholes; w++) {
+      inner += '<div class="fv-whole-circle">';
+      for (let i = 0; i < den && i < 8; i++) {
+        inner += `<span class="fv-item filled" style="animation-delay:${(w*den+i)*0.04}s">${currentFoodIcon}</span>`;
+      }
+      inner += '</div>';
+    }
+  } else if (wholes > 4) {
+    inner += `<div class="fv-whole-circle"><span class="fv-item filled">${currentFoodIcon}</span><span style="font-size:0.8rem;color:var(--text-muted)">×${wholes*den}</span></div>`;
+  }
+
+  if (partNum > 0 || wholes === 0) {
+    inner += '<div class="fv-partial">';
+    const showDen = Math.min(den, 8);
+    const showNum = Math.min(partNum, showDen);
+    for (let i = 0; i < showDen; i++) {
+      const cls = i < showNum ? 'filled' : 'empty';
+      const delay = (wholes * den + i) * 0.04;
+      inner += `<span class="fv-item ${cls}" style="animation-delay:${delay}s">${currentFoodIcon}</span>`;
+    }
+    inner += '</div>';
+  }
+
+  return `<div class="fv-group"><div class="fv-whole-group">${inner}</div><div class="fv-label">${num}/${den}</div></div>`;
+}
+
+function renderMixedVisual(m, label) {
+  let inner = '';
+  const showWholes = Math.min(m.whole, 4);
+
+  for (let w = 0; w < showWholes; w++) {
+    inner += '<div class="fv-whole-circle">';
+    const showDen = Math.min(m.den, 6);
+    for (let i = 0; i < showDen; i++) {
+      inner += `<span class="fv-item filled" style="animation-delay:${(w*m.den+i)*0.04}s">${currentFoodIcon}</span>`;
+    }
+    inner += '</div>';
+  }
+  if (m.whole > 4) {
+    inner += `<span style="font-size:0.9rem;color:var(--text-muted);align-self:center">…+${m.whole - 4} more</span>`;
+  }
+
+  if (m.num > 0) {
+    inner += '<div class="fv-partial">';
+    const showDen = Math.min(m.den, 6);
+    const showNum = Math.min(m.num, showDen);
+    for (let i = 0; i < showDen; i++) {
+      const cls = i < showNum ? 'filled' : 'empty';
+      const delay = (showWholes * m.den + i) * 0.04;
+      inner += `<span class="fv-item ${cls}" style="animation-delay:${delay}s">${currentFoodIcon}</span>`;
+    }
+    inner += '</div>';
+  }
+
+  let lbl = m.whole > 0 ? m.whole : '';
+  if (m.num > 0) lbl += (m.whole > 0 ? ' ' : '') + m.num + '/' + m.den;
+  if (!lbl) lbl = '0';
+
+  return `<div class="fv-group"><div class="fv-whole-group">${inner}</div><div class="fv-label">${lbl}</div></div>`;
+}
+
+function hideFractionVisual() {
+  $fracVisual.className = 'fraction-visual';
+  $fracVisual.innerHTML = '';
+}
 
 // ──── Mode & Difficulty buttons ────
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1084,6 +1262,7 @@ function setupOrderOfOps() {
     .replace(/\)/g, '<span class="operator" style="color:var(--warning)">)</span>');
 
   $question.innerHTML = exprHtml + ' <span class="equals">=</span> <span class="whole-part">?</span>';
+  hideFractionVisual();
   setupSimpleInput();
 }
 
@@ -1103,6 +1282,7 @@ function setupProperFraction() {
     renderFraction(q.frac2.num, q.frac2.den) +
     ' <span class="equals">=</span> <span class="whole-part">?</span>';
 
+  renderFractionVisual(q.frac1, q.frac2, q.symbol, false);
   setupFractionInput(false);
 }
 
@@ -1122,6 +1302,7 @@ function setupImproperFraction() {
     renderImproper(q.frac2.num, q.frac2.den) +
     ' <span class="equals">=</span> <span class="whole-part">?</span>';
 
+  renderFractionVisual(q.frac1, q.frac2, q.symbol, false);
   setupFractionInput(false);
 }
 
@@ -1141,6 +1322,7 @@ function setupMixedNumber() {
     renderMixed(q.mixed2.whole, q.mixed2.num, q.mixed2.den) +
     ' <span class="equals">=</span> <span class="whole-part">?</span>';
 
+  renderFractionVisual(q.mixed1, q.mixed2, q.symbol, true);
   setupFractionInput(true);
 }
 
